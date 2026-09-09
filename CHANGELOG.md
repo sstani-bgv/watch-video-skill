@@ -2,6 +2,11 @@
 
 All notable changes to `/watch` are documented here.
 
+## [0.3.3] — 2026-09-09
+
+### Changed
+- Detail mode is now requested for every new video instead of being stored as a one-time setup preference.
+
 ## [0.3.2] — 2026-09-09
 
 ### Changed

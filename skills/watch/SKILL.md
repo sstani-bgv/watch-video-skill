@@ -48,7 +48,7 @@ Branch on two fields:
 - **`first_run: true`** → genuine first-time setup. Do these in order:
   1. If `missing_binaries` is non-empty, run the installer first (it auto-installs on macOS / prints commands elsewhere — see below) and confirm the binaries land. **Do not skip this and jump to preferences.**
   2. Run the installer once more if needed so it scaffolds `~/.config/watch/.env` (it only writes the template when the file is absent, so let it create the file *before* you write any values into it).
-  3. Ask which transcription mode the user wants: Groq cloud, local whisper.cpp, or captions-only. Configure it, ask the watch-preference question, offer Apify MCP, connect vidIQ through the current host's supported adapter, then set `SETUP_COMPLETE=true`.
+  3. Ask which transcription mode the user wants: Groq cloud, local whisper.cpp, or captions-only. Configure it, offer Apify MCP, connect vidIQ through the current host's supported adapter, then set `SETUP_COMPLETE=true`. Do not ask for or persist a default detail mode during setup; detail is selected for each new video.
 - **`can_proceed: false` and `first_run: false`** → setup was finished before but the environment regressed (e.g. `missing_binaries` after an OS change). Run the installer to remediate, then proceed. Don't re-ask preferences.
 
 A missing Whisper key is *encouraged to fix, not required*: on a genuine first run `status` will read `needs_key` even when binaries are present — that's your cue to encourage a key, not a blocker.
@@ -81,21 +81,7 @@ On macOS with Homebrew, it auto-installs `ffmpeg` and `yt-dlp`. On Linux/Windows
 
 **If transcription is not configured after install:** follow `${SKILL_DIR}/SETUP.md`. Groq is the recommended cloud option; local whisper.cpp keeps audio on the machine; captions-only requires no key. Never repeat a pasted secret in chat or place it in a repository/command argument. Store cloud keys only in `~/.config/watch/.env` with mode `0600`.
 
-**First-run watch preference:** after the installer has scaffolded `~/.config/watch/.env`, use `AskUserQuestion` to ask one question:
-
-- Default detail (one dial). Present these as `AskUserQuestion` options in this exact order — lightest to heaviest — and keep `(recommended)` on `balanced` even though it is not first (do **not** reorder to put the recommended option first):
-  - `transcript` — no frames at all, transcript only (skips video download when captions exist).
-  - `efficient` — fast keyframe pass (cap 50).
-  - `balanced` (recommended) — scene-aware frames (cap 100, default).
-  - `token-burner` — scene-aware, uncapped (maximum fidelity; high token cost).
-
-Write the answer directly into `~/.config/watch/.env` by setting the bare key on its own line — **no trailing inline comment** (a `# note` after the value can break parsing):
-
-```bash
-WATCH_DETAIL=balanced
-```
-
-Use the user's selected value. If they skip the question, keep the recommended default. Once dependencies, the API-key choice, and this preference are handled, write or update `SETUP_COMPLETE=true` in the same file. Do not ask this preference question again when `SETUP_COMPLETE=true`.
+**Detail is not a first-run preference.** Never save the user's detail choice as part of onboarding. Ask for it immediately before every new video as described in Step 1.
 
 **Structured mode (optional):** `python3 "${SKILL_DIR}/scripts/setup.py" --json` emits `{status, can_proceed, first_run, setup_complete, missing_binaries, whisper_backend, has_api_key, config_file, watch_detail, platform}` where `status` is one of `ready | needs_install | needs_key | needs_install_and_key`. `status` describes the *ideal* state (a key is encouraged, so a keyless first run reads `needs_key`); `can_proceed` is the operational gate (binaries present AND a key is set OR setup was already completed). Branch on `can_proceed`/`first_run` to decide whether to run; use `status` to decide what to encourage.
 
@@ -127,7 +113,16 @@ Within a single session, you can skip Step 0 on follow-up `/watch` calls — onc
 
 ## How to invoke
 
-**Step 1 — parse the user input.** Separate the video source (URL or path) from any question the user asked. Example: `/watch https://youtu.be/abc what language is this in?` → source = `https://youtu.be/abc`, question = `what language is this in?`.
+**Step 1 — parse the user input and choose detail.** Separate the video source (URL or path) from any question the user asked. Example: `/watch https://youtu.be/abc what language is this in?` → source = `https://youtu.be/abc`, question = `what language is this in?`.
+
+Before processing **every new video source**, ask the user which detail mode to use unless they already named a mode explicitly in the current request. Present the choices from lightest to heaviest:
+
+- `transcript` — transcript only, no frames.
+- `efficient` — fast keyframe pass, up to 50 frames.
+- `balanced` (recommended) — scene-aware pass, up to 100 frames.
+- `token-burner` — scene-aware and uncapped; highest token cost.
+
+Do not silently reuse a choice from an earlier video or treat `WATCH_DETAIL` as user consent for this run. If the user declines or skips the question, use `balanced` and say that you used the recommended fallback. If the user sends several new videos in one request, obtain a detail choice for each source; one answer may cover all only when the user explicitly says to use the same mode for the batch. Do not ask again for follow-up questions about a video already processed in the current session, because those should reuse the existing frames and transcript.
 
 **Step 2 — run the watch script.** Pass the source verbatim. Do not shell-escape it yourself beyond normal quoting:
 
@@ -192,9 +187,9 @@ This holds for `transcript` detail too: even with no frames, produce a **summary
 
 ## Detail and frames
 
-Default behavior comes from `~/.config/watch/.env`:
+The agent asks for detail on every new video. The CLI still supports a fallback default for non-agent/manual use:
 
-- `WATCH_DETAIL=transcript|efficient|balanced|token-burner` (default: `balanced`)
+- `WATCH_DETAIL=transcript|efficient|balanced|token-burner` (manual CLI fallback; default: `balanced`)
 
 At `transcript` detail, captions are enough to return a report without downloading video. If captions are missing, the script downloads audio only and tries Whisper. If no transcript can be produced, it reports the limitation clearly; re-run with `--detail balanced` for frames.
 

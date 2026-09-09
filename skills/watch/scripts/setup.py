@@ -54,10 +54,8 @@ OPENAI_API_KEY=
 WATCH_WHISPER=
 WHISPER_LOCAL_MODEL=~/.config/watch/models/ggml-small.bin
 
-# Default watch behavior (the /watch first-run wizard sets this for you).
-# Allowed values: transcript | efficient | balanced | token-burner
-# Keep the value on its own line with no trailing comment.
-# WATCH_DETAIL=balanced
+# Detail is selected by the agent for every new video. WATCH_DETAIL remains
+# supported only as a fallback for direct/manual CLI use.
 """
 
 
