@@ -4,7 +4,7 @@
 Modes:
   setup.py --check      Silent preflight. Exit 0 if ready, 2/3/4 on failure.
   setup.py --json       Machine-readable status for Claude to parse.
-  setup.py              Installer. Auto-installs deps, scaffolds .env, marks SETUP_COMPLETE.
+  setup.py              Installer. Auto-installs deps and scaffolds .env.
 
 Design:
 - Silent on success: --check exits 0 with no output when everything's ready so
@@ -14,7 +14,7 @@ Design:
 - SETUP_COMPLETE=true in ~/.config/watch/.env tells us the user has been
   through a successful installer run at least once.
 - Never sudo. On macOS, auto-install via brew. Elsewhere, print exact commands.
-- Never write an API key to disk automatically — only scaffold placeholders.
+- Never write a secret to disk automatically — only scaffold placeholders.
 """
 from __future__ import annotations
 
@@ -40,8 +40,8 @@ ENV_TEMPLATE = """# /watch API configuration
 # Whisper transcription fallback — used only when yt-dlp cannot get captions
 # (or when you point /watch at a local file with no subtitles).
 #
-# Groq is preferred: it runs whisper-large-v3 at a fraction of OpenAI's price
-# and is faster in practice. OpenAI is the compatible fallback.
+# Select groq, openai, or local. Leave blank for captions-only mode.
+# Groq is the recommended cloud choice; local uses whisper.cpp.
 #
 # Get a Groq key:  https://console.groq.com/keys
 # Get an OpenAI key:  https://platform.openai.com/api-keys
@@ -51,6 +51,8 @@ ENV_TEMPLATE = """# /watch API configuration
 
 GROQ_API_KEY=
 OPENAI_API_KEY=
+WATCH_WHISPER=
+WHISPER_LOCAL_MODEL=~/.config/watch/models/ggml-small.bin
 
 # Default watch behavior (the /watch first-run wizard sets this for you).
 # Allowed values: transcript | efficient | balanced | token-burner
@@ -114,6 +116,9 @@ def _read_env_key(name: str) -> str | None:
 
 
 def _have_api_key() -> tuple[bool, str | None]:
+    if _read_env_key("WATCH_WHISPER") == "local":
+        model = Path(_read_env_key("WHISPER_LOCAL_MODEL") or "~/.config/watch/models/ggml-small.bin").expanduser()
+        return bool(_which("whisper-cli") and model.is_file()), "local"
     if _read_env_key("GROQ_API_KEY"):
         return True, "groq"
     if _read_env_key("OPENAI_API_KEY"):
@@ -340,11 +345,13 @@ def cmd_install() -> int:
         return 0
 
     print("")
-    print("[setup] one step left: add a Whisper API key.")
+    print("[setup] choose a transcription mode; see skills/watch/SETUP.md.")
     print("")
-    print(f"  Edit {CONFIG_FILE} and set either:")
-    print("    GROQ_API_KEY=...    (preferred — cheaper, faster; get one at console.groq.com/keys)")
-    print("    OPENAI_API_KEY=...  (fallback; get one at platform.openai.com/api-keys)")
+    print(f"  Edit {CONFIG_FILE} and choose one:")
+    print("    WATCH_WHISPER=groq + GROQ_API_KEY=...       (recommended cloud mode)")
+    print("    WATCH_WHISPER=local + WHISPER_LOCAL_MODEL=... (local whisper.cpp)")
+    print("    WATCH_WHISPER=openai + OPENAI_API_KEY=...     (cloud fallback)")
+    print("    captions-only: leave keys blank and set SETUP_COMPLETE=true")
     print("")
     print("  Without a key, /watch still works but videos without captions come back frames-only.")
     return 3

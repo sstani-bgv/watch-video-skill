@@ -58,28 +58,37 @@ def test_default_is_balanced(cut_clip: Path):
 
 def test_timestamps_add_cue_frames_to_detail(cut_clip: Path):
     out = _run(cut_clip, "--detail", "balanced", "--timestamps", "1,3")
-    assert "reason=transcript-cue" in out
-    assert "reason=scene-change" in out  # detail frames still present (additive)
+    assert "**Cue frames:** 2" in out
+    assert "(scene" in out  # detail frames still present (additive)
 
 
 def test_timestamps_with_transcript_detail_is_cue_only(cut_clip: Path):
     out = _run(cut_clip, "--detail", "transcript", "--timestamps", "1,3")
-    assert "reason=transcript-cue" in out
-    assert "reason=scene-change" not in out
-    assert "reason=keyframe" not in out
-
-
-def _frame_lines(out: str) -> int:
-    return sum(1 for line in out.splitlines() if "/frames/frame_" in line and "(t=" in line)
+    assert "**Cue frames:** 2" in out
+    assert "**Detail:** transcript" in out
 
 
 def test_dedup_collapses_static_by_default(static_clip: Path):
     out = _run(static_clip)  # solid blue → identical frames collapse to one
     assert "near-duplicate" in out
-    assert _frame_lines(out) == 1
+    assert "- **Frames:** 1 selected" in out
+    assert "- **Body contact sheets:** 1" in out
 
 
 def test_no_dedup_preserves_static_frames(static_clip: Path):
     out = _run(static_clip, "--no-dedup")
     assert "near-duplicate" not in out
-    assert _frame_lines(out) > 1
+    assert "- **Frames:** 1 selected" not in out
+
+
+def test_no_contact_sheets_lists_individual_frames(cut_clip: Path):
+    out = _run(cut_clip, "--no-contact-sheets")
+    assert "Body contact sheets" not in out
+    assert "/frames/frame_" in out
+
+
+def test_hook_adds_dense_contact_sheets(cut_clip: Path):
+    out = _run(cut_clip, "--hook")
+    assert "**Hook microscope:**" in out
+    assert "### Hook microscope" in out
+    assert "/hook_sheets/hook_sheet_" in out

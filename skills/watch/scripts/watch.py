@@ -17,7 +17,8 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from config import frame_cap, get_config  # noqa: E402
 from download import download, fetch_captions, is_url  # noqa: E402
-from frames import MAX_FPS, auto_fps, auto_fps_focus, extract_at_timestamps, extract_keyframes, extract_scene_or_uniform, format_time, get_metadata, merge_frames, parse_time, parse_timestamps  # noqa: E402
+from frames import MAX_FPS, auto_fps, auto_fps_focus, create_contact_sheets, extract_at_timestamps, extract_keyframes, extract_scene_or_uniform, format_time, get_metadata, merge_frames, parse_time, parse_timestamps  # noqa: E402
+from hook import analyse_hook  # noqa: E402
 from transcribe import filter_range, format_transcript, parse_vtt  # noqa: E402
 from whisper import load_api_key, transcribe_video  # noqa: E402
 
@@ -56,15 +57,25 @@ def main() -> int:
     )
     ap.add_argument(
         "--whisper",
-        choices=["groq", "openai"],
+        choices=["groq", "openai", "local"],
         default=None,
-        help="Force a specific Whisper backend. Default: prefer Groq, fall back to OpenAI.",
+        help="Force a Whisper backend: Groq, OpenAI, or local whisper.cpp.",
     )
     ap.add_argument(
         "--no-dedup",
         action="store_true",
         help="Disable near-duplicate frame removal. Keeps visually identical "
              "frames (static screen recordings, held slides) instead of collapsing them.",
+    )
+    ap.add_argument(
+        "--no-contact-sheets",
+        action="store_true",
+        help="List individual frames instead of packing them into 3x2 contact sheets.",
+    )
+    ap.add_argument(
+        "--hook",
+        action="store_true",
+        help="Sample the first 15 seconds at 15 fps for detailed hook analysis.",
     )
     args = ap.parse_args()
 
@@ -108,8 +119,8 @@ def main() -> int:
 
     # --timestamps needs the video for frame grabs, so it overrides the
     # transcript-mode download skip (and forces a full, not audio-only, fetch).
-    audio_only = detail == "transcript" and not cue_timestamps
-    if detail == "transcript" and transcript_segments and not cue_timestamps:
+    audio_only = detail == "transcript" and not cue_timestamps and not args.hook
+    if detail == "transcript" and transcript_segments and not cue_timestamps and not args.hook:
         video_path = None
     else:
         if url_source:
@@ -227,6 +238,19 @@ def main() -> int:
     if cue_frames:
         frames = merge_frames(frames, cue_frames)
 
+    body_sheets = [] if args.no_contact_sheets else create_contact_sheets(
+        frames,
+        work / "body_sheets",
+        cols=3,
+        rows=2,
+        tile_width=max(240, min(400, args.resolution // 2)),
+        prefix="body_sheet",
+    )
+    hook_result = {"frames": [], "sheets": [], "duration_seconds": 0.0, "fps": 0.0}
+    if args.hook and video_path:
+        print("[watch] running 15 fps hook microscope over the first 15 seconds…", file=sys.stderr)
+        hook_result = analyse_hook(video_path, work, full_video_duration=full_duration)
+
     if not transcript_segments and dl.get("subtitle_path"):
         try:
             all_segments = parse_vtt(dl["subtitle_path"])
@@ -253,9 +277,9 @@ def main() -> int:
                 print(f"[watch] whisper fallback failed: {exc}", file=sys.stderr)
         else:
             hint = (
-                f"--whisper {args.whisper} was set but the matching API key is missing"
+                f"--whisper {args.whisper} was set but that backend is not configured"
                 if args.whisper else
-                "no subtitles and no Whisper API key found"
+                "no subtitles and no Whisper backend is configured"
             )
             setup_py = SCRIPT_DIR / "setup.py"
             print(
@@ -307,6 +331,13 @@ def main() -> int:
         )
     if frames:
         print(f"- **Frame size:** max {args.resolution}px wide, max 1998px tall")
+    if body_sheets:
+        print(f"- **Body contact sheets:** {len(body_sheets)} (3x2, chronological)")
+    if hook_result["sheets"]:
+        print(
+            f"- **Hook microscope:** {len(hook_result['frames'])} frames at 15 fps "
+            f"packed into {len(hook_result['sheets'])} contact sheets"
+        )
     if transcript_segments:
         in_range = " in range" if focused else ""
         print(
@@ -334,9 +365,29 @@ def main() -> int:
         )
 
     print()
-    print("## Frames")
+    print("## Visuals")
     print()
-    if frames:
+    if hook_result["sheets"] or body_sheets:
+        print(
+            "**Read every contact sheet below in chronological order.** Tiles run "
+            "left-to-right, top-to-bottom. Open an individual source frame only "
+            "when small text or a subtle change needs closer inspection."
+        )
+        print()
+        if hook_result["sheets"]:
+            print("### Hook microscope (first 15 seconds, 15 fps)")
+            print()
+            for sheet in hook_result["sheets"]:
+                stamps = ", ".join(f"{t:.2f}s" for t in sheet["timestamps"])
+                print(f"- `{sheet['path']}` — tiles: {stamps}")
+            print()
+        if body_sheets:
+            print("### Body contact sheets (3x2)")
+            print()
+            for sheet in body_sheets:
+                stamps = ", ".join(format_time(t) for t in sheet["timestamps"])
+                print(f"- `{sheet['path']}` — tiles: {stamps}")
+    elif frames:
         print(f"Frames live at: `{work / 'frames'}`")
         print()
         print(
@@ -378,7 +429,7 @@ def main() -> int:
         print(
             "_No transcript available — proceed with frames only. "
             "Captions were missing and the Whisper fallback was unavailable "
-            "(no API key set, or `--no-whisper` was used). "
+            "(no backend configured, backend failed, or `--no-whisper` was used). "
             f"Run `python3 {setup_py}` to enable Whisper, then re-run._"
         )
 

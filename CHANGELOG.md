@@ -2,6 +2,18 @@
 
 All notable changes to `/watch` are documented here.
 
+## [0.3.0] — 2026-09-09
+
+### Added
+- Default 3×2 chronological contact sheets for token-efficient review.
+- `--hook` microscope: first 15 seconds at 15 fps in 5×9 sheets.
+- Local whisper.cpp transcription via `--whisper local`.
+- Russian first-run guide and copy-ready installation prompt.
+- Optional official Apify MCP setup for Instagram/TikTok fallback.
+
+### Changed
+- Published fork metadata under `sstani-bgv/watch-video-skill` while preserving upstream MIT attribution.
+
 ## [0.2.0] — 2026-06-29
 
 ### Added

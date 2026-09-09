@@ -68,3 +68,14 @@ def test_scene_fallback_on_static_clip(static_clip: Path, tmp_path: Path):
     )
     assert meta["engine"] == "uniform"
     assert meta["fallback"] is True
+
+
+def test_contact_sheets_pack_frames(cut_clip: Path, tmp_path: Path):
+    selected = frames.extract(
+        str(cut_clip), tmp_path / "frames", fps=2.0, max_frames=7,
+    )
+    sheets = frames.create_contact_sheets(selected, tmp_path / "sheets", cols=3, rows=2)
+    assert len(sheets) == 2
+    assert len(sheets[0]["timestamps"]) == 6
+    assert len(sheets[1]["timestamps"]) == 1
+    assert all(Path(sheet["path"]).stat().st_size > 0 for sheet in sheets)

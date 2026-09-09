@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -212,6 +213,73 @@ def extract(
         }
         for i, p in enumerate(frames)
     ]
+
+
+def create_contact_sheets(
+    frames: list[dict],
+    out_dir: Path,
+    cols: int = 3,
+    rows: int = 2,
+    tile_width: int = 320,
+    prefix: str = "sheet",
+) -> list[dict]:
+    """Pack chronological JPEGs into compact contact sheets via ffmpeg."""
+    if not frames:
+        return []
+    if shutil.which("ffmpeg") is None:
+        raise SystemExit("ffmpeg is not installed. Install with: brew install ffmpeg")
+    if cols < 1 or rows < 1:
+        raise ValueError("contact sheet cols/rows must be positive")
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for existing in out_dir.glob(f"{prefix}_*.jpg"):
+        existing.unlink()
+
+    per_sheet = cols * rows
+    sheets: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="watch-sheets-") as tmp_name:
+        tmp_dir = Path(tmp_name)
+        for i, frame in enumerate(frames, start=1):
+            source = Path(frame["path"]).resolve()
+            link = tmp_dir / f"frame_{i:04d}.jpg"
+            try:
+                link.symlink_to(source)
+            except OSError:
+                shutil.copy2(source, link)
+
+        for sheet_index, start in enumerate(range(0, len(frames), per_sheet), start=1):
+            chunk = frames[start:start + per_sheet]
+            sheet_path = out_dir / f"{prefix}_{sheet_index:03d}.jpg"
+            vf = (
+                f"scale={tile_width}:-2,"
+                f"tile={cols}x{rows}:nb_frames={len(chunk)}:padding=4:margin=4:color=white"
+            )
+            result = subprocess.run(
+                [
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-framerate", "1", "-start_number", str(start + 1),
+                    "-i", str(tmp_dir / "frame_%04d.jpg"),
+                    "-vf", vf, "-frames:v", "1", "-q:v", "3",
+                    str(sheet_path),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                raise SystemExit(f"ffmpeg contact-sheet creation failed: {result.stderr.strip()}")
+            if not sheet_path.exists() or sheet_path.stat().st_size == 0:
+                raise SystemExit(f"ffmpeg produced no contact sheet: {sheet_path}")
+            sheets.append({
+                "index": sheet_index - 1,
+                "path": str(sheet_path),
+                "cols": cols,
+                "rows": rows,
+                "frame_paths": [frame["path"] for frame in chunk],
+                "timestamps": [frame["timestamp_seconds"] for frame in chunk],
+                "start_seconds": chunk[0]["timestamp_seconds"],
+                "end_seconds": chunk[-1]["timestamp_seconds"],
+            })
+    return sheets
 
 
 def extract_scene_candidates(

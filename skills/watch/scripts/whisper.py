@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Transcribe a video via Groq or OpenAI Whisper API.
+"""Transcribe a video via Groq, OpenAI, or local whisper.cpp.
 
 Strategy: extract audio (mono 16kHz mp3, tiny payload), upload to whichever
 API has a key. Returns segments in the same shape as transcribe.parse_vtt so
@@ -63,7 +63,7 @@ def plan_chunks(
 
 
 def load_api_key(preferred: str | None = None) -> tuple[str, str] | tuple[None, None]:
-    """Return (backend, api_key). Prefers Groq, falls back to OpenAI.
+    """Return (backend, credential). Prefers configured mode, then Groq/OpenAI.
 
     If `preferred` is "groq" or "openai", only that backend's key is considered.
     """
@@ -94,6 +94,25 @@ def load_api_key(preferred: str | None = None) -> tuple[str, str] | tuple[None, 
         Path.home() / ".config" / "watch" / ".env",
         Path.cwd() / ".env",
     ]
+
+    configured = _from_env("WATCH_WHISPER")
+    if not configured:
+        for candidate in dotenv_paths:
+            configured = _from_dotenv(candidate, "WATCH_WHISPER")
+            if configured:
+                break
+    preferred = preferred or configured
+    if preferred == "local":
+        model = _from_env("WHISPER_LOCAL_MODEL")
+        if not model:
+            for candidate in dotenv_paths:
+                model = _from_dotenv(candidate, "WHISPER_LOCAL_MODEL")
+                if model:
+                    break
+        model = model or str(Path.home() / ".config/watch/models/ggml-small.bin")
+        if shutil.which("whisper-cli") and Path(model).expanduser().is_file():
+            return "local", str(Path(model).expanduser().resolve())
+        return None, None
 
     candidates = (("GROQ_API_KEY", "groq"), ("OPENAI_API_KEY", "openai"))
     if preferred is not None:
@@ -429,10 +448,13 @@ def transcribe_video(
     if not backend or not api_key:
         setup_py = Path(__file__).resolve().parent / "setup.py"
         raise SystemExit(
-            "No Whisper API key available. Set GROQ_API_KEY (preferred) or OPENAI_API_KEY "
-            "in the environment or in ~/.config/watch/.env. "
+            "No usable Whisper backend. Configure Groq/OpenAI, or set WATCH_WHISPER=local "
+            "with whisper-cli and WHISPER_LOCAL_MODEL in ~/.config/watch/.env. "
             f"Run `python3 {setup_py}` to configure."
         )
+
+    if backend == "local":
+        return _transcribe_local(video_path, audio_out, api_key), "local"
 
     print(f"[watch] extracting audio for Whisper ({backend})…", file=sys.stderr)
     audio_path = extract_audio(video_path, audio_out)
@@ -465,9 +487,52 @@ def transcribe_video(
     return segments, backend
 
 
+def _parse_whisper_time(value: str) -> float:
+    parts = value.replace(",", ".").split(":")
+    return float(parts[-1]) + 60 * float(parts[-2]) + 3600 * float(parts[-3])
+
+
+def _transcribe_local(video_path: str, audio_out: Path, model_path: str) -> list[dict]:
+    """Transcribe locally with whisper.cpp and return normalized segments."""
+    cli = shutil.which("whisper-cli")
+    if not cli:
+        raise SystemExit("whisper-cli not found; install whisper-cpp or choose Groq")
+    wav = audio_out.with_suffix(".wav")
+    wav.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run([
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-i", str(Path(video_path).resolve()), "-vn", "-ar", "16000",
+        "-ac", "1", "-c:a", "pcm_s16le", str(wav.resolve()),
+    ], capture_output=True, text=True)
+    if result.returncode != 0 or not wav.is_file():
+        raise SystemExit(f"local Whisper audio conversion failed: {result.stderr.strip()}")
+    prefix = audio_out.parent / "local-whisper"
+    result = subprocess.run([
+        cli, "-m", model_path, "-f", str(wav.resolve()), "-l", "auto",
+        "--output-json", "--output-file", str(prefix), "--no-prints",
+    ], capture_output=True, text=True)
+    output = Path(str(prefix) + ".json")
+    if result.returncode != 0 or not output.is_file():
+        raise SystemExit(f"local Whisper failed: {result.stderr.strip()}")
+    data = json.loads(output.read_text(encoding="utf-8"))
+    segments = []
+    for item in data.get("transcription", []):
+        stamps = item.get("timestamps", {})
+        text = (item.get("text") or "").strip()
+        if text:
+            segments.append({
+                "start": _parse_whisper_time(stamps.get("from", "00:00:00,000")),
+                "end": _parse_whisper_time(stamps.get("to", "00:00:00,000")),
+                "text": text,
+            })
+    if not segments:
+        raise SystemExit("local Whisper returned no transcript segments")
+    return segments
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("usage: whisper.py <video-path> [<audio-out.mp3>] [--backend groq|openai]", file=sys.stderr)
+        print("usage: whisper.py <video-path> [<audio-out.mp3>] [--backend groq|openai|local]", file=sys.stderr)
         raise SystemExit(2)
 
     video = sys.argv[1]

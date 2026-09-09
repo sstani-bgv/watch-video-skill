@@ -16,6 +16,8 @@ def _run(args, *, home=None, extra_env=None):
     # Don't let a real key in the developer's shell env leak into the test.
     env.pop("GROQ_API_KEY", None)
     env.pop("OPENAI_API_KEY", None)
+    env.pop("WATCH_WHISPER", None)
+    env.pop("WHISPER_LOCAL_MODEL", None)
     env.pop("SETUP_COMPLETE", None)
     if home is not None:
         env["HOME"] = str(home)

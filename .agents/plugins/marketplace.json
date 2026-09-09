@@ -1,5 +1,5 @@
 {
-  "name": "claude-video",
+  "name": "watch-video-skill",
   "interface": {
     "displayName": "watch"
   },
@@ -8,7 +8,7 @@
       "name": "watch",
       "source": {
         "source": "url",
-        "url": "https://github.com/bradautomates/claude-video.git"
+        "url": "https://github.com/sstani-bgv/watch-video-skill.git"
       },
       "policy": {
         "installation": "AVAILABLE",

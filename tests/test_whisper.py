@@ -68,6 +68,23 @@ class TestShiftSegments:
         assert segs[0]["start"] == 0.0
 
 
+class TestLocalWhisper:
+    def test_parses_whisper_cpp_timestamp(self):
+        assert whisper._parse_whisper_time("01:02:03,450") == pytest.approx(3723.45)
+
+    def test_loads_configured_local_backend(self, tmp_path: Path, monkeypatch):
+        model = tmp_path / "ggml-small.bin"
+        model.write_bytes(b"model")
+        monkeypatch.setenv("WATCH_WHISPER", "local")
+        monkeypatch.setenv("WHISPER_LOCAL_MODEL", str(model))
+        monkeypatch.setattr(whisper.shutil, "which", lambda name: "/usr/local/bin/whisper-cli")
+
+        backend, credential = whisper.load_api_key()
+
+        assert backend == "local"
+        assert credential == str(model.resolve())
+
+
 def _make_mp3(path: Path, seconds: float) -> None:
     """Synthesize a mono 16k 64k mp3 of a sine tone — mirrors extract_audio's format."""
     subprocess.run(

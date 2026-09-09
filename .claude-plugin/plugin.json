@@ -1,12 +1,12 @@
 {
   "name": "watch",
-  "version": "0.2.0",
-  "description": "Let Claude watch a video. Downloads with yt-dlp, extracts auto-scaled frames with ffmpeg, pulls captions or falls back to Whisper, and hands frames + transcript to Claude so it can answer questions about the video.",
+  "version": "0.3.0",
+  "description": "Watch a video from a URL or local file and answer questions about its visual and spoken content.",
   "author": {
-    "name": "Bradley Bonanno"
+    "name": "sstani-bgv"
   },
-  "homepage": "https://github.com/bradautomates/claude-video",
-  "repository": "https://github.com/bradautomates/claude-video",
+  "homepage": "https://github.com/sstani-bgv/watch-video-skill",
+  "repository": "https://github.com/sstani-bgv/watch-video-skill",
   "license": "MIT",
   "keywords": ["video", "watch", "youtube", "vimeo", "tiktok", "transcription", "whisper", "yt-dlp", "ffmpeg", "multimodal", "frames"]
 }
