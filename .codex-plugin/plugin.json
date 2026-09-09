@@ -1,6 +1,6 @@
 {
   "name": "watch",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Watch a video from a URL or local file and answer questions about its visual and spoken content.",
   "author": {
     "name": "sstani-bgv"
@@ -25,7 +25,7 @@
   "interface": {
     "displayName": "watch",
     "shortDescription": "Give Claude a video input — paste a URL or path and ask about it.",
-    "longDescription": "Watch downloads video with yt-dlp, extracts compact chronological contact sheets, supports a dense opening-hook pass, and combines native captions or local/cloud Whisper with visual evidence. Optional Apify MCP access provides a fallback for Instagram and TikTok.",
+    "longDescription": "Watch downloads video with yt-dlp, extracts compact chronological contact sheets, supports a dense opening-hook pass, and combines native captions or local/cloud Whisper with visual evidence. Setup also offers Apify MCP and vidIQ for social and YouTube workflows.",
     "developerName": "sstani-bgv",
     "category": "Productivity",
     "capabilities": [

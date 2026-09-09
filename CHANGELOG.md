@@ -2,6 +2,11 @@
 
 All notable changes to `/watch` are documented here.
 
+## [0.3.1] — 2026-09-09
+
+### Added
+- vidIQ installation and connection confirmation to the Russian Codex setup flow.
+
 ## [0.3.0] — 2026-09-09
 
 ### Added
