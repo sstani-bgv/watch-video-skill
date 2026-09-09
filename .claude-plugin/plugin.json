@@ -1,6 +1,6 @@
 {
   "name": "watch",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Watch a video from a URL or local file and answer questions about its visual and spoken content.",
   "author": {
     "name": "sstani-bgv"

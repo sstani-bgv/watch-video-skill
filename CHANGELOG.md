@@ -2,6 +2,11 @@
 
 All notable changes to `/watch` are documented here.
 
+## [0.3.2] — 2026-09-09
+
+### Changed
+- vidIQ setup is now host-aware: Codex uses the curated App, while Claude Code uses the `claude.ai Vidiq` connector and verifies its MCP tools.
+
 ## [0.3.1] — 2026-09-09
 
 ### Added

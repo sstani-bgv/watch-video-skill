@@ -32,7 +32,7 @@ fi
 
 ## Step 0 — Setup preflight (runs every `/watch` invocation, silent on success)
 
-On a genuine first run, read `${SKILL_DIR}/SETUP.md` completely and follow its Russian onboarding. It is the canonical installation guide for dependencies, transcription, optional Apify MCP access, and the Codex vidIQ installation step.
+On a genuine first run, read `${SKILL_DIR}/SETUP.md` completely and follow its Russian onboarding. It is the canonical installation guide for dependencies, transcription, optional Apify MCP access, and host-aware vidIQ connection.
 
 **Python interpreter:** every `python3 ...` command in this skill is for macOS/Linux. On **Windows**, substitute `python` — the `python3` command on Windows is the Microsoft Store stub and will not run the script.
 
@@ -48,7 +48,7 @@ Branch on two fields:
 - **`first_run: true`** → genuine first-time setup. Do these in order:
   1. If `missing_binaries` is non-empty, run the installer first (it auto-installs on macOS / prints commands elsewhere — see below) and confirm the binaries land. **Do not skip this and jump to preferences.**
   2. Run the installer once more if needed so it scaffolds `~/.config/watch/.env` (it only writes the template when the file is absent, so let it create the file *before* you write any values into it).
-  3. Ask which transcription mode the user wants: Groq cloud, local whisper.cpp, or captions-only. Configure it, ask the watch-preference question, offer Apify MCP, follow the vidIQ step for Codex, then set `SETUP_COMPLETE=true`.
+  3. Ask which transcription mode the user wants: Groq cloud, local whisper.cpp, or captions-only. Configure it, ask the watch-preference question, offer Apify MCP, connect vidIQ through the current host's supported adapter, then set `SETUP_COMPLETE=true`.
 - **`can_proceed: false` and `first_run: false`** → setup was finished before but the environment regressed (e.g. `missing_binaries` after an OS change). Run the installer to remediate, then proceed. Don't re-ask preferences.
 
 A missing Whisper key is *encouraged to fix, not required*: on a genuine first run `status` will read `needs_key` even when binaries are present — that's your cue to encourage a key, not a blocker.
